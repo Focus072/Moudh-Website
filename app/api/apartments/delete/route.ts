@@ -1,44 +1,42 @@
 import { NextResponse } from "next/server"
-
-const API_BASE_URL = "https://goldenvalley.app.n8n.cloud/webhook"
-const DELETE_APARTMENT_URL = `${API_BASE_URL}/delete-apartments`
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/lib/auth-config"
+import connectDB from "@/lib/db"
+import Apartment from "@/models/Apartment"
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json()
-    const { name } = body
-
-    if (!name) {
+    const session = await getServerSession(authOptions)
+    
+    if (!session?.user?.id) {
       return NextResponse.json(
-        { error: "Apartment name is required" },
+        { error: "Unauthorized" },
+        { status: 401 }
+      )
+    }
+
+    const body = await request.json()
+    const { id } = body
+
+    if (!id) {
+      return NextResponse.json(
+        { error: "Apartment ID is required" },
         { status: 400 }
       )
     }
 
-    const response = await fetch(DELETE_APARTMENT_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        name,
-      }),
+    await connectDB()
+
+    const apartment = await Apartment.findOneAndDelete({
+      _id: id,
+      userId: session.user.id,
     })
 
-    if (!response.ok) {
-      let errorMessage = `${response.status} ${response.statusText}`
-      try {
-        const errorData = await response.json()
-        if (errorData.message) {
-          errorMessage = errorData.message
-          if (errorData.hint) {
-            errorMessage += `. ${errorData.hint}`
-          }
-        }
-      } catch {
-        // If response is not JSON, use the status text
-      }
-      throw new Error(`Failed to delete apartment: ${errorMessage}`)
+    if (!apartment) {
+      return NextResponse.json(
+        { error: "Apartment not found or unauthorized" },
+        { status: 404 }
+      )
     }
 
     return NextResponse.json({ success: true })

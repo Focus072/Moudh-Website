@@ -108,40 +108,6 @@ export const AddApartmentForm = ({ open, onOpenChange }: AddApartmentFormProps) 
         throw new Error(errorData.error || "Failed to create apartment")
       }
 
-      // Create a temporary apartment object from the form data
-      const newApartment: Apartment = {
-        id: `temp-${Date.now()}`,
-        name: name.trim(),
-        price: price.trim(),
-        rooms: rooms.trim(),
-        location: location.trim(),
-        city: city.trim(),
-        utilities: utilities.trim(),
-        parking: parking.trim(),
-        petPolicy: petPolicy.trim(),
-        available: available.trim(),
-        note: note.trim(),
-        status: "Available",
-      }
-
-      // Optimistically add the apartment to the UI immediately
-      mutate(
-        "/api/apartments",
-        async (currentApartments: Apartment[] | undefined) => {
-          const updated = currentApartments ? [newApartment, ...currentApartments] : [newApartment]
-          // Also save to localStorage for persistence
-          if (typeof window !== "undefined") {
-            try {
-              localStorage.setItem("apartments_cache", JSON.stringify(updated))
-            } catch {
-              // Ignore localStorage errors
-            }
-          }
-          return updated
-        },
-        false
-      )
-
       // Reset form
       setName("")
       setPrice("")
@@ -157,13 +123,13 @@ export const AddApartmentForm = ({ open, onOpenChange }: AddApartmentFormProps) 
       // Show success message
       setSuccessMessage("Apartment created successfully!")
       
-      // Close dialog immediately
+      // Refresh the apartments list from the database
+      mutate("/api/apartments")
+      
+      // Close dialog after a short delay
       setTimeout(() => {
         onOpenChange(false)
       }, 1000)
-
-      // Refresh the display (from localStorage)
-      mutate("/api/apartments")
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create apartment")
     } finally {

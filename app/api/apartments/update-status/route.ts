@@ -1,16 +1,26 @@
 import { NextResponse } from "next/server"
-
-const API_BASE_URL = "https://goldenvalley.app.n8n.cloud/webhook"
-const UPDATE_STATUS_URL = `${API_BASE_URL}/update-status`
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/lib/auth-config"
+import connectDB from "@/lib/db"
+import Apartment from "@/models/Apartment"
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json()
-    const { name, status } = body
-
-    if (!name) {
+    const session = await getServerSession(authOptions)
+    
+    if (!session?.user?.id) {
       return NextResponse.json(
-        { error: "Apartment name is required" },
+        { error: "Unauthorized" },
+        { status: 401 }
+      )
+    }
+
+    const body = await request.json()
+    const { id, status } = body
+
+    if (!id) {
+      return NextResponse.json(
+        { error: "Apartment ID is required" },
         { status: 400 }
       )
     }
@@ -22,31 +32,19 @@ export async function POST(request: Request) {
       )
     }
 
-    const response = await fetch(UPDATE_STATUS_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        name,
-        status,
-      }),
-    })
+    await connectDB()
 
-    if (!response.ok) {
-      let errorMessage = `${response.status} ${response.statusText}`
-      try {
-        const errorData = await response.json()
-        if (errorData.message) {
-          errorMessage = errorData.message
-          if (errorData.hint) {
-            errorMessage += `. ${errorData.hint}`
-          }
-        }
-      } catch {
-        // If response is not JSON, use the status text
-      }
-      throw new Error(`Failed to update status: ${errorMessage}`)
+    const apartment = await Apartment.findOneAndUpdate(
+      { _id: id, userId: session.user.id },
+      { status },
+      { new: true }
+    )
+
+    if (!apartment) {
+      return NextResponse.json(
+        { error: "Apartment not found or unauthorized" },
+        { status: 404 }
+      )
     }
 
     return NextResponse.json({ success: true })

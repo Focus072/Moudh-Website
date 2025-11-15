@@ -1,10 +1,20 @@
 import { NextResponse } from "next/server"
-
-const API_BASE_URL = "https://goldenvalley.app.n8n.cloud/webhook"
-const ADD_APARTMENT_URL = `${API_BASE_URL}/add-apartment`
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/lib/auth-config"
+import connectDB from "@/lib/db"
+import Apartment from "@/models/Apartment"
 
 export async function POST(request: Request) {
   try {
+    const session = await getServerSession(authOptions)
+    
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      )
+    }
+
     const body = await request.json()
     const { 
       name, 
@@ -26,42 +36,45 @@ export async function POST(request: Request) {
       )
     }
 
-    const response = await fetch(ADD_APARTMENT_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        name,
-        price,
-        rooms,
-        location,
-        city,
-        utilities,
-        parking,
-        petPolicy,
-        available,
-        note: note || "",
-      }),
+    await connectDB()
+
+    const apartment = new Apartment({
+      userId: session.user.id,
+      name: name.trim(),
+      price: price.trim(),
+      rooms: rooms.trim(),
+      location: location.trim(),
+      city: city.trim(),
+      utilities: utilities.trim(),
+      parking: parking.trim(),
+      petPolicy: petPolicy.trim(),
+      available: available.trim(),
+      note: (note || "").trim(),
+      status: "Available",
     })
 
-    if (!response.ok) {
-      let errorMessage = `${response.status} ${response.statusText}`
-      try {
-        const errorData = await response.json()
-        if (errorData.message) {
-          errorMessage = errorData.message
-          if (errorData.hint) {
-            errorMessage += `. ${errorData.hint}`
-          }
-        }
-      } catch {
-        // If response is not JSON, use the status text
-      }
-      throw new Error(`Failed to create apartment: ${errorMessage}`)
-    }
+    await apartment.save()
 
-    return NextResponse.json({ success: true }, { status: 201 })
+    return NextResponse.json(
+      { 
+        success: true,
+        apartment: {
+          id: apartment._id.toString(),
+          name: apartment.name,
+          price: apartment.price,
+          rooms: apartment.rooms,
+          location: apartment.location,
+          city: apartment.city,
+          utilities: apartment.utilities,
+          parking: apartment.parking,
+          petPolicy: apartment.petPolicy,
+          available: apartment.available,
+          note: apartment.note,
+          status: apartment.status,
+        }
+      },
+      { status: 201 }
+    )
   } catch (error) {
     console.error("Error creating apartment:", error)
     return NextResponse.json(

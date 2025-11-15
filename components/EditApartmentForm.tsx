@@ -107,6 +107,7 @@ export const EditApartmentForm = ({ open, onOpenChange, apartment }: EditApartme
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          id: apartment.id,
           name: apartment.name, // Use original name (not editable)
           price: price.trim(),
           rooms: rooms.trim(),
@@ -125,39 +126,8 @@ export const EditApartmentForm = ({ open, onOpenChange, apartment }: EditApartme
         throw new Error(errorData.error || "Failed to update apartment")
       }
 
-      // Optimistically update the apartment in the UI and localStorage
-      mutate(
-        "/api/apartments",
-        async (currentApartments: Apartment[] | undefined) => {
-          if (!currentApartments) return currentApartments
-          const updated = currentApartments.map((apt) =>
-            apt.name === apartment.name
-              ? {
-                  ...apt,
-                  price: price.trim(),
-                  rooms: rooms.trim(),
-                  location: location.trim(),
-                  city: city.trim(),
-                  utilities: utilities.trim(),
-                  parking: parking.trim(),
-                  petPolicy: petPolicy.trim(),
-                  available: available.trim(),
-                  note: note.trim(),
-                }
-              : apt
-          )
-          // Update localStorage
-          if (typeof window !== "undefined") {
-            try {
-              localStorage.setItem("apartments_cache", JSON.stringify(updated))
-            } catch {
-              // Ignore localStorage errors
-            }
-          }
-          return updated
-        },
-        false
-      )
+      // Refresh the apartments list from the database
+      mutate("/api/apartments")
 
       // Close dialog
       onOpenChange(false)

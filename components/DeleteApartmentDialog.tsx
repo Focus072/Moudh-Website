@@ -31,36 +31,11 @@ export const DeleteApartmentDialog = ({
   const [error, setError] = useState<string | null>(null)
 
   const handleDelete = async () => {
-    if (!apartmentName) return
+    if (!apartmentId) return
 
     setIsDeleting(true)
     setError(null)
 
-    // Optimistically remove the apartment from the UI immediately
-    mutate(
-      "/api/apartments",
-      async (currentApartments: Apartment[] | undefined) => {
-        // Remove the apartment from the list by name
-        const updated = currentApartments
-          ? currentApartments.filter((apt) => apt.name !== apartmentName)
-          : []
-        // Also update localStorage
-        if (typeof window !== "undefined") {
-          try {
-            localStorage.setItem("apartments_cache", JSON.stringify(updated))
-          } catch {
-            // Ignore localStorage errors
-          }
-        }
-        return updated
-      },
-      false // Don't revalidate immediately
-    )
-
-    // Close dialog immediately
-    onOpenChange(false)
-
-    // Try to delete from backend in the background
     try {
       const response = await fetch("/api/apartments/delete", {
         method: "POST",
@@ -68,16 +43,23 @@ export const DeleteApartmentDialog = ({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          name: apartmentName,
+          id: apartmentId,
         }),
       })
 
-      // Refresh the display (from localStorage)
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to delete apartment")
+      }
+
+      // Refresh the apartments list from the database
       mutate("/api/apartments")
+      
+      // Close dialog
+      onOpenChange(false)
     } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete apartment")
       console.error("Error deleting apartment:", err)
-      // Refresh to restore the apartment if delete failed
-      mutate("/api/apartments")
     } finally {
       setIsDeleting(false)
     }

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import useSWR from "swr"
 import { signOut, useSession } from "next-auth/react"
 import { ApartmentCard } from "@/components/ApartmentCard"
@@ -10,65 +10,45 @@ import { ProtectedRoute } from "@/components/ProtectedRoute"
 import { Loader2, RefreshCw, LogOut } from "lucide-react"
 import { type Apartment } from "@/lib/api"
 
-// Helper functions to persist apartments in localStorage
-const STORAGE_KEY = "apartments_cache"
-
-const getCachedApartments = (): Apartment[] | null => {
-  if (typeof window === "undefined") return null
-  try {
-    const cached = localStorage.getItem(STORAGE_KEY)
-    return cached ? JSON.parse(cached) : null
-  } catch {
-    return null
-  }
-}
-
-const setCachedApartments = (apartments: Apartment[]) => {
-  if (typeof window === "undefined") return
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(apartments))
-  } catch {
-    // Ignore localStorage errors
-  }
-}
-
 const fetcher = async (url: string): Promise<Apartment[]> => {
-  // This app only sends data TO n8n, it doesn't receive data FROM n8n
-  // So we always return apartments from localStorage
-  if (typeof window === "undefined") {
-    return []
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 15000) // 15 second timeout
+
+  try {
+    const response = await fetch(url, { signal: controller.signal })
+    clearTimeout(timeoutId)
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Failed to fetch apartments' }))
+      throw new Error(errorData.error || `Failed to fetch apartments: ${response.status}`)
+    }
+    return response.json()
+  } catch (error) {
+    clearTimeout(timeoutId)
+    if (error instanceof Error) {
+      if (error.name === 'AbortError') {
+        throw new Error('Request timeout. Check if MongoDB is running and accessible.')
+      }
+      throw error
+    }
+    throw new Error('Failed to fetch apartments')
   }
-  const cached = getCachedApartments()
-  return cached || []
 }
 
 export default function DashboardPage() {
   const [isFormOpen, setIsFormOpen] = useState(false)
-  const [mounted, setMounted] = useState(false)
   const { data: session } = useSession()
-  
-  // Ensure component is mounted before accessing localStorage
-  useEffect(() => {
-    setMounted(true)
-  }, [])
-  
-  // Get initial data safely (only on client after mount)
-  const initialData = mounted ? (getCachedApartments() || []) : []
   
   const { data: apartments, error, isLoading, mutate: refreshApartments } = useSWR<Apartment[]>(
     "/api/apartments",
     fetcher,
     {
-      // No auto-refresh - only refresh on user actions
       refreshInterval: 0,
-      revalidateOnFocus: false,
-      revalidateOnReconnect: false,
-      // Use cached data as initial data
-      fallbackData: initialData,
+      revalidateOnFocus: true,
+      revalidateOnReconnect: true,
     }
   )
   
-  // Use apartments from cache (we don't fetch from n8n)
   const displayApartments = apartments || []
 
   const handleLogout = async () => {
@@ -120,7 +100,21 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {!isLoading && (
+        {error && (
+          <div className="text-center py-12">
+            <p className="text-destructive text-lg mb-2">
+              Error loading apartments
+            </p>
+            <p className="text-muted-foreground text-sm mb-4">
+              {error instanceof Error ? error.message : "Unknown error occurred"}
+            </p>
+            <Button onClick={() => refreshApartments()}>
+              Retry
+            </Button>
+          </div>
+        )}
+
+        {!isLoading && !error && (
           <>
             {displayApartments.length === 0 ? (
               <div className="text-center py-12">

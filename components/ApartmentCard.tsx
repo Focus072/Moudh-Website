@@ -24,27 +24,6 @@ export const ApartmentCard = ({ apartment }: ApartmentCardProps) => {
     setIsUpdatingStatus(true)
     setError(null)
 
-    // Optimistically update the status in the UI immediately
-    mutate(
-      "/api/apartments",
-      async (currentApartments: Apartment[] | undefined) => {
-        if (!currentApartments) return currentApartments
-        const updated = currentApartments.map((apt) =>
-          apt.name === apartment.name ? { ...apt, status: newStatus } : apt
-        )
-        // Also update localStorage
-        if (typeof window !== "undefined") {
-          try {
-            localStorage.setItem("apartments_cache", JSON.stringify(updated))
-          } catch {
-            // Ignore localStorage errors
-          }
-        }
-        return updated
-      },
-      false // Don't revalidate immediately
-    )
-
     try {
       const response = await fetch("/api/apartments/update-status", {
         method: "POST",
@@ -52,7 +31,7 @@ export const ApartmentCard = ({ apartment }: ApartmentCardProps) => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          name: apartment.name,
+          id: apartment.id,
           status: newStatus,
         }),
       })
@@ -62,12 +41,10 @@ export const ApartmentCard = ({ apartment }: ApartmentCardProps) => {
         throw new Error(errorData.error || "Failed to update status")
       }
 
-      // Refresh the display (from localStorage)
+      // Refresh the apartments list from the database
       mutate("/api/apartments")
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update status")
-      // Refresh to restore original status if update failed
-      mutate("/api/apartments")
     } finally {
       setIsUpdatingStatus(false)
     }
