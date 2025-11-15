@@ -4,6 +4,9 @@ import { authOptions } from "@/lib/auth-config"
 import connectDB from "@/lib/db"
 import Apartment from "@/models/Apartment"
 
+// Force dynamic rendering (required for API routes using headers/sessions)
+export const dynamic = 'force-dynamic'
+
 export async function POST(request: Request) {
   try {
     const session = await getServerSession(authOptions)
