@@ -50,6 +50,26 @@ export async function POST(request: Request) {
       )
     }
 
+    // Also send to n8n webhook (don't fail if webhook is down)
+    const API_BASE_URL = "https://goldenvalley.app.n8n.cloud/webhook"
+    const UPDATE_STATUS_URL = `${API_BASE_URL}/update-status`
+    
+    try {
+      await fetch(UPDATE_STATUS_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: apartment.name,
+          status: apartment.status,
+        }),
+      })
+    } catch (webhookError) {
+      // Log but don't fail - database update succeeded
+      console.error("Failed to trigger n8n webhook:", webhookError)
+    }
+
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error("Error updating status:", error)

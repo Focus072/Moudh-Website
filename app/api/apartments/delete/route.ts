@@ -30,7 +30,8 @@ export async function POST(request: Request) {
 
     await connectDB()
 
-    const apartment = await Apartment.findOneAndDelete({
+    // Get apartment first to send name to webhook
+    const apartment = await Apartment.findOne({
       _id: id,
       userId: session.user.id,
     })
@@ -40,6 +41,31 @@ export async function POST(request: Request) {
         { error: "Apartment not found or unauthorized" },
         { status: 404 }
       )
+    }
+
+    // Delete from database
+    await Apartment.findOneAndDelete({
+      _id: id,
+      userId: session.user.id,
+    })
+
+    // Also send to n8n webhook (don't fail if webhook is down)
+    const API_BASE_URL = "https://goldenvalley.app.n8n.cloud/webhook"
+    const DELETE_APARTMENT_URL = `${API_BASE_URL}/delete-apartments`
+    
+    try {
+      await fetch(DELETE_APARTMENT_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: apartment.name,
+        }),
+      })
+    } catch (webhookError) {
+      // Log but don't fail - database delete succeeded
+      console.error("Failed to trigger n8n webhook:", webhookError)
     }
 
     return NextResponse.json({ success: true })

@@ -58,6 +58,34 @@ export async function POST(request: Request) {
 
     await apartment.save()
 
+    // Also send to n8n webhook (don't fail if webhook is down)
+    const API_BASE_URL = "https://goldenvalley.app.n8n.cloud/webhook"
+    const ADD_APARTMENT_URL = `${API_BASE_URL}/add-apartment`
+    
+    try {
+      await fetch(ADD_APARTMENT_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: apartment.name,
+          price: apartment.price,
+          rooms: apartment.rooms,
+          location: apartment.location,
+          city: apartment.city,
+          utilities: apartment.utilities,
+          parking: apartment.parking,
+          petPolicy: apartment.petPolicy,
+          available: apartment.available,
+          note: apartment.note,
+        }),
+      })
+    } catch (webhookError) {
+      // Log but don't fail - database save succeeded
+      console.error("Failed to trigger n8n webhook:", webhookError)
+    }
+
     return NextResponse.json(
       { 
         success: true,
