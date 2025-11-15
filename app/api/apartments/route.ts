@@ -21,8 +21,8 @@ export async function GET() {
       .sort({ createdAt: -1 })
       .lean()
 
-    const formattedApartments = apartments.map((apt) => ({
-      id: apt._id.toString(),
+    const formattedApartments = apartments.map((apt: any) => ({
+      id: String(apt._id),
       name: apt.name,
       price: apt.price,
       rooms: apt.rooms,
